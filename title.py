@@ -5,23 +5,23 @@ import sqlite3
 import logging
 import nest_asyncio
 import telegram
-nest_asyncio.apply()
+# nest_asyncio.apply()
 
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ConversationHandler,
-    ContextTypes,
-    filters,
-)
+# )
+# from telegram.ext import (
+#     ApplicationBuilder,
+#     CommandHandler,
+#     CallbackQueryHandler,
+#     MessageHandler,
+#     ConversationHandler,
+#     ContextTypes,
+#     filters,
+# )
 import asyncio
 
 # Параметры бота
