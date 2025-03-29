@@ -1,34 +1,32 @@
 import datetime
-import os
-import re
 import sqlite3
-import logging
 import nest_asyncio
+import asyncio
 import telegram
-# nest_asyncio.apply()
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
-# )
-# from telegram.ext import (
-#     ApplicationBuilder,
-#     CommandHandler,
-#     CallbackQueryHandler,
-#     MessageHandler,
-#     ConversationHandler,
-#     ContextTypes,
-#     filters,
-# )
-import asyncio
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
+)
 
-# Параметры бота
+nest_asyncio.apply()
+
 BOT_TOKEN = "7814500090:AAH8V_ZakvdPi_N7rNRaCHL20gPLGQYgHtI"
 ADMIN_ID = 7801573997
-BOT_USERNAME = "redpeakbot"  # без @
-PUBLICATION_CHANNEL_ID = "@redpeaktj"  # если требуется публикация
+BOT_USERNAME = "redpeakbot"  
+PUBLICATION_CHANNEL_ID = "@redpeaktj" 
 
 # Эмодзи
 EMOJI_WAVE = "👋"
@@ -41,16 +39,11 @@ EMOJI_CANCEL = "❌"
 EMOJI_INFO = "ℹ️"
 EMOJI_ADMIN = "👑"
 
-# Состояния для оформления заказа клиента
 CHOOSING_CATEGORY, RECEIVING_NAME, RECEIVING_PHOTO, RECEIVING_PRODUCT_LINK, RECEIVING_PRICE, CONFIRMING_ORDER = range(6)
-# Состояния для создания объявления (админ)
-# Состояния для создания объявления (админ)
 OFFER_RECEIVING_CATEGORY, OFFER_RECEIVING_PHOTO, OFFER_RECEIVING_PRODUCT_NAME, OFFER_RECEIVING_PRODUCT_LINK, OFFER_RECEIVING_PRICE, OFFER_RECEIVING_DESCRIPTION, OFFER_CONFIRMATION = range(10, 17)
 
-# Состояние для подтверждения заказа по объявлению
 OFFER_ORDER_CONFIRM = 20
 
-# Словарь для хранения ожидающих причин отказа (админ)
 admin_rejections = {}
 
 
@@ -61,6 +54,7 @@ keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="all_orders_a
 orderss = InlineKeyboardMarkup(keyboard)
 
 # ----------------- Инициализация БД -----------------
+
 def init_db():
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
@@ -111,6 +105,7 @@ def init_db():
     conn.close()
 
 # ------------- Новые заявки (только статус "Новый") -------------
+
 async def new_orders_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -185,10 +180,12 @@ async def show_new_orders_pag(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"{EMOJI_PRICE} Цена: {price}\n"
         f"Страница: {page+1}/{total}"
     )
+
     buttons = [
         [InlineKeyboardButton("Принять", callback_data=f"accept_{order_id}"),
          InlineKeyboardButton("Отказать", callback_data=f"reject_{order_id}")]
     ]
+
     pagination_buttons = []
     if page > 0:
         pagination_buttons.append(InlineKeyboardButton("⬅️", callback_data=f"new_orders_pag_{page-1}"))
@@ -216,6 +213,7 @@ async def new_orders_pag_callback(update: Update, context: ContextTypes.DEFAULT_
     await show_new_orders_pag(update, context, page)
 
 # ------------- Все заявки (группировка по пользователям) -------------
+
 async def all_orders_all_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -242,7 +240,6 @@ async def show_orders_by_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
 
-    # Разбираем callback_data
     data_parts = query.data.split("_")
     user_id = data_parts[3]
     page = int(data_parts[4]) if len(data_parts) > 4 else 0
@@ -258,7 +255,6 @@ async def show_orders_by_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     orders = cursor.fetchall()
     conn.close()
 
-    # Если заявок нет
     if not orders:
         await query.edit_message_text("❌ Нет заявок для данного пользователя.")
         return
@@ -301,6 +297,21 @@ async def show_orders_by_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="all_orders_all")])
 
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "ℹ **Помощь по боту**\n\n"
+        "🤖 Этот бот предназначен для оформления и управления заказами.\n\n"
+        "📌 **Команды:**\n"
+        "  /start - Запуск бота и главное меню\n"
+        "  /help - Справка по командам\n"
+        "  /new_order - Создать новую заявку\n"
+        "  /my_orders - Посмотреть мои заказы\n"
+        "  /contact_admin - Связаться с администратором\n\n"
+        "❓ Если у вас возникли вопросы, обратитесь к администратору: [Контакт](https://t.me/red_tj)"
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown", disable_web_page_preview=True)
+
 
 
 async def change_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -366,6 +377,7 @@ async def set_status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
 # ------------- Функции для добавления заметки к заказу -------------
+
 async def note_order_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -382,7 +394,6 @@ async def note_order_received(update: Update, context: ContextTypes.DEFAULT_TYPE
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE orders SET admin_comment = ? WHERE id = ?", (note, order_id))
-    # Получаем user_id для уведомления
     cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
     row = cursor.fetchone()
     conn.commit()
@@ -393,6 +404,7 @@ async def note_order_received(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(chat_id=user_id, text=f"🔒 Добавлена новая заметка от Админа\n🏷 Заявка: #{order_id}\n📌 Заметка: \n\n{note}\n\n")
 
 # ------------- Поиск заявок -------------
+
 async def search_orders_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -444,6 +456,7 @@ async def admin_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await rejection_reason_admin(update, context)
 
 # ------------- История заказов пользователя -------------
+
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conn = sqlite3.connect("orders.db")
@@ -546,62 +559,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📝 Оставить заявку", callback_data="new_order")],
         [InlineKeyboardButton("📋 Мои заказы", callback_data="my_orders")],
-        # Связь с админом @plodoc
         [InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")] 
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    welcome_text = f"{EMOJI_WAVE} Привет, {user.first_name}!\n\nВыберите нужное действие:"
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+
+    welcome_text = f"⚡ **Приветствуем вас, {user.first_name}!**\n\nДля начала работы выберите нужное действие. Если у вас возникли вопросы, введите /help."
+
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 
-# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     user = update.effective_user
-#     if user.id == ADMIN_ID:
-#         await admin_main_menu(update, context)
-#         return
-
-#     args = context.args
-#     if args and args[0].startswith("offer_"):
-#         offer_id = args[0].split("_", 1)[1]
-#         conn = sqlite3.connect("orders.db")
-#         cursor = conn.cursor()
-#         cursor.execute("SELECT category, photo_file_id, product_link, price, description FROM offers WHERE id = ?", (offer_id,))
-#         offer = cursor.fetchone()
-#         conn.close()
-#         if offer:
-#             category, photo_file_id, product_link, price, description = offer
-#             context.user_data['order_data'] = {
-#                 'category': category,
-#                 'photo_file_id': photo_file_id,
-#                 'product_link': product_link,
-#                 'price': price,
-#                 'offer_id': offer_id,
-#                 'is_offer': True
-#             }
-#             summary = (
-#                 f"{EMOJI_ORDER} *Подытожим заказ по объявлению:*\n"
-#                 f"• Категория: {category}\n"
-#                 f"• {EMOJI_LINK} Ссылка: {product_link}\n"
-#                 f"• {EMOJI_PRICE} Цена: {price}\n\n"
-#                 "Подтвердите оформление заявки:"
-#             )
-#             keyboard = [
-#                 [InlineKeyboardButton(f"{EMOJI_OK} Подтвердить", callback_data="confirm_order_offer"),
-#                  InlineKeyboardButton(f"{EMOJI_CANCEL} Отмена", callback_data="cancel_order_offer")]
-#             ]
-#             reply_markup = InlineKeyboardMarkup(keyboard)
-#             await update.message.reply_text(summary, parse_mode="Markdown", reply_markup=reply_markup)
-#         else:
-#             await update.message.reply_text("Объявление не найдено или устарело.")
-#         return
-
-#     keyboard = [
-#         [InlineKeyboardButton("📝 Оставить заявку", callback_data="new_order")],
-#         [InlineKeyboardButton("📋 Мои заказы", callback_data="my_orders")]
-#     ]
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-#     welcome_text = f"{EMOJI_WAVE} Привет, {user.first_name}!\n\nВыберите нужное действие:"
-#     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 async def new_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -611,13 +577,17 @@ async def my_orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.answer()
     await my_orders(update, context)
 
+
 async def order_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     keyboard = [
         [InlineKeyboardButton("Электроника ⚡", callback_data="category_Электроника"),
          InlineKeyboardButton("Одежда 👗", callback_data="category_Одежда")],
         [InlineKeyboardButton("Аксессуары 🛍", callback_data="category_Аксессуары"),
-         InlineKeyboardButton("Другое 🔧", callback_data="category_Другое")]
+         InlineKeyboardButton("Другое 🔧", callback_data="category_Другое")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_order")]
     ]
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.user_data.pop('order_data', None)
     if update.message:
@@ -633,9 +603,13 @@ async def category_chosen_callback(update: Update, context: ContextTypes.DEFAULT
     if 'order_data' not in context.user_data:
         context.user_data['order_data'] = {}
     context.user_data['order_data']['category'] = category
+    cancel_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_order")]
+    ])
     await query.edit_message_text(
         text=f"✅ Вы выбрали категорию: *{category}*\n\n🏷 Введите название товара:",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard
     )
     return RECEIVING_NAME
 
@@ -644,30 +618,46 @@ async def name_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'order_data' not in context.user_data:
         context.user_data['order_data'] = {}
     context.user_data['order_data']['product_name'] = text
+    cancel_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_order")]
+    ])
     await update.message.reply_text(
         f"📦 Название товара: *{text}*\n\n{EMOJI_PHOTO}📷 Пришлите, пожалуйста, фото товара.",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard
     )
     return RECEIVING_PHOTO
 
 async def photo_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cancel_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_order")]
+    ])
     if update.message.photo:
         file_id = update.message.photo[-1].file_id
         if 'order_data' not in context.user_data:
             context.user_data['order_data'] = {}
         context.user_data['order_data']['photo_file_id'] = file_id
-        await update.message.reply_text(f"{EMOJI_LINK}⛓️‍💥 Отлично! Теперь пришлите ссылку на товар.")
+        await update.message.reply_text(
+            f"{EMOJI_LINK}⛓️‍💥 Отлично! Теперь пришлите ссылку на товар.",
+            reply_markup=cancel_keyboard
+        )
         return RECEIVING_PRODUCT_LINK
-    await update.message.reply_text("❗ Пожалуйста, отправьте фотографию товара.", reply_markup=nazad)
+    await update.message.reply_text("❗ Пожалуйста, отправьте фотографию товара.", reply_markup=cancel_keyboard)
     return RECEIVING_PHOTO
 
 async def product_link_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'order_data' not in context.user_data:
         context.user_data['order_data'] = {}
     context.user_data['order_data']['product_link'] = update.message.text
-    await update.message.reply_text(f"{EMOJI_PRICE} Укажите, пожалуйста, цену товара (например, 1999.99):")
+    cancel_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_order")]
+    ])
+    await update.message.reply_text(
+        f"{EMOJI_PRICE} Укажите, пожалуйста, цену товара (например, 1999.99):",
+        reply_markup=cancel_keyboard
+    )
     return RECEIVING_PRICE
-    
+
 async def price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'order_data' not in context.user_data:
         context.user_data['order_data'] = {}
@@ -688,6 +678,17 @@ async def price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(summary, parse_mode="Markdown", reply_markup=reply_markup)
     return CONFIRMING_ORDER
+
+# Обработчик для кнопки "Отмена"
+async def cancel_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query:
+        await update.callback_query.answer("Заявка отменена.")
+        await update.callback_query.edit_message_text("❌ Оформление заявки отменено.")
+    elif update.message:
+        await update.message.reply_text("❌ Оформление заявки отменено.")
+    context.user_data.pop('order_data', None)
+    return ConversationHandler.END
+
 
 async def confirm_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -717,8 +718,9 @@ async def confirm_order_callback(update: Update, context: ContextTypes.DEFAULT_T
     order_id = cursor.lastrowid
     conn.commit()
     conn.close()
-
-    await query.edit_message_text("⏳ Ваша заявка отправлена на одобрение администратору.")
+    keyboard = [[InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")]
+                ]
+    await query.edit_message_text("🟢 Ваша заявка отправлена на одобрение администратору.\n⏳ Если ваша заявка долго не обрабатывается, напишите администратору.", reply_markup=InlineKeyboardMarkup(keyboard))
     caption = (
         f"{EMOJI_ORDER} *Новый заказ #{order_id}*\n"
         f"👤 Клиент: {update.effective_user.first_name} (@{update.effective_user.username})\n"
@@ -749,7 +751,7 @@ def get_order_title(user, order_id=None):
     """
     title = f"📦 Заявка от UID: {user.id}"
     if order_id:
-        title += f" (🆔 ID заказа: {order_id})"
+        title += f" (ID заказа: {order_id})"
     return title
 
 def get_user_profile_link(user):
@@ -758,7 +760,7 @@ def get_user_profile_link(user):
     Если username отсутствует, используется tg-ссылка.
     """
     if user.username:
-        return f"https://t.me/{user.username}"
+        return f"https://t.me/{user.id}"
     else:
         return f"tg://user?id={user.id}"
 
@@ -804,10 +806,33 @@ async def confirm_order_callback(update: Update, context: ContextTypes.DEFAULT_T
     profile_link = get_user_profile_link(update.effective_user)
 
     # Редактируем сообщение: если оригинальное сообщение имеет подпись, редактируем именно её
+
+    
+    keyboard = [[InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    message_text = (
+        "⏳ *Ваша заявка отправлена на одобрение администратору!*\n\n"
+        "🔹 Пожалуйста, ожидайте ответа.\n"
+        "🔹 Обычно заявки обрабатываются быстро, но если *долгое время нет ответа*,\n"
+        "💬 *Напишите администратору:* [Связаться](https://t.me/red_tj)\n\n"
+        "🚀 Спасибо за использование нашего сервиса!"
+    )
+
     if query.message.caption:
-        await query.edit_message_caption(caption="⏳ Ваша заявка отправлена на одобрение администратору.")
+        await query.edit_message_caption(
+            caption=message_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
     else:
-        await query.edit_message_text("⏳ Ваша заявка отправлена на одобрение администратору.")
+        await query.edit_message_text(
+            text=message_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
+
+
 
     caption = (
         f"{EMOJI_ORDER} <b>{order_title}</b>\n"
@@ -840,17 +865,24 @@ async def confirm_order_offer_callback(update: Update, context: ContextTypes.DEF
 async def cancel_order_offer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cancel_order_callback(update, context)
 
+
+
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
-    # Обновляем запрос: добавляем поле "Время"
     cursor.execute("""
         SELECT id, category, product_name, product_link, price, status, admin_comment, "Время"
         FROM orders WHERE user_id = ?
     """, (user_id,))
     orders = cursor.fetchall()
     conn.close()
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     if orders:
         text = f"{EMOJI_ORDER} *Ваша история заказов:*\n\n"
         for order in orders:
@@ -868,20 +900,24 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     else:
         text = "❌ У вас пока нет заказов."
+    
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, parse_mode="Markdown")
+        await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     else:
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
-# 
-# 4
-
-async def cancel_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer("❌ Заявка отменена.")
-    context.user_data.pop('order_data', None)
-    await query.edit_message_text("❌ Вы отменили оформление заявки.")
-    return ConversationHandler.END
+# Back btn 
+async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Главное меню
+    keyboard = [
+        [InlineKeyboardButton("📝 Оставить заявку", callback_data="new_order")],
+        [InlineKeyboardButton("📋 Мои заказы", callback_data="my_orders")],
+        [InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    text = "⬇️ Выберите нужное действие:"
+    
+    await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
 
 async def confirm_order_offer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await confirm_order_callback(update, context)
@@ -890,6 +926,8 @@ async def cancel_order_offer_callback(update: Update, context: ContextTypes.DEFA
     await cancel_order_callback(update, context)
 
 # ------------- Создание объявления (админ) -------------
+
+
 async def offer_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         if update.message:
@@ -925,7 +963,6 @@ async def offer_photo_received(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"{EMOJI_ORDER}🏷 Отправьте название товара:")
         return OFFER_RECEIVING_PRODUCT_NAME
     
-
 
     await update.message.reply_text("❗ Пожалуйста, отправьте фотографию товара.")
     return OFFER_RECEIVING_PHOTO
@@ -1005,6 +1042,7 @@ async def offer_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text("❌ Создание объявления отменено.")
     return ConversationHandler.END
 
+
 # ------------- Решение администратора по заявке -------------
 
 
@@ -1016,7 +1054,7 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
     if action == "accept":
-        cursor.execute("UPDATE orders SET status = ? WHERE id = ?", ("Принятый", order_id))
+        cursor.execute("UPDATE orders SET status = ? WHERE id = ?", ("Заказ принят ✅", order_id))
         cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
         row = cursor.fetchone()
         conn.commit()
@@ -1026,7 +1064,7 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_id = row[0]
             await context.bot.send_message(
                 chat_id=user_id,
-                text="✅ Ваша заявка принята! Ожидайте дальнейших инструкций.",
+                text="✅ Ваша заявка принята!\nЕсли возникнут вопросы напишите администратору:",
                 reply_markup=InlineKeyboardMarkup([client_order])
             )
         # Удаляем старое сообщение
@@ -1034,9 +1072,7 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.delete()
         except Exception:
             pass
-        # Отправляем новое сообщение "Заказ принят!"
-        confirmation_msg = await update.effective_chat.send_message("✅ Заказ принят!")
-        # Создаём объект-обёртку (dummy update) с новым сообщением, чтобы вызвать пагинацию
+        confirmation_msg = await update.effective_chat.send_message("✅ Заявка пользователя была принята!")
         class DummyUpdate:
             def __init__(self, message):
                 self.message = message
@@ -1062,7 +1098,7 @@ async def rejection_reason_admin(update: Update, context: ContextTypes.DEFAULT_T
         reason = update.message.text
         conn = sqlite3.connect("orders.db")
         cursor = conn.cursor()
-        cursor.execute("UPDATE orders SET status = ?, admin_comment = ? WHERE id = ?", ("Отказан", reason, order_id))
+        cursor.execute("UPDATE orders SET status = ?, admin_comment = ? WHERE id = ?", ("Ваша заявка отказана ❌", reason, order_id))
         cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
         row = cursor.fetchone()
         conn.commit()
@@ -1076,6 +1112,7 @@ async def rejection_reason_admin(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("❌ Ошибка")
 
 # ------------- Пагинация для новых заказов -------------
+
 async def show_offer_pag(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int):
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
@@ -1108,20 +1145,21 @@ async def show_offer_pag(update: Update, context: ContextTypes.DEFAULT_TYPE, pag
 
     offer = offers[page]
     offer_id, category, photo_file_id, product_name, product_link, price, description = offer
-
+    offer_link = f"https://t.me/{BOT_USERNAME}?start=offer_{offer_id}"
     caption = (
     f"📦 <b>Оффер #{offer_id}</b>\n"
     f"🏷 <b>Название:</b> {product_name}\n"
     f"💬 <b>Описание:</b> {description}\n"
     f"💰 <b>Цена:</b> {price} сомони\n"
     f"📂 <b>Категория:</b> {category}\n"
-    f"🔗 <a href='{product_link}'>Ссылка на товар</a>"
+    f"🔗 <a href='{product_link}'>Ссылка на товар</a>\n"
+    f"🟢 Ссылка на оффер {offer_link}"
+
 )
-
-
+    
     buttons = [
-    [InlineKeyboardButton("❌ Удалить", callback_data=f"delete_offer_{offer_id}")],
-    [InlineKeyboardButton("📢 Опубликовать", callback_data=f"publish_offer_{offer_id}")]
+        [InlineKeyboardButton("❌ Удалить", callback_data=f"delete_offer_{offer_id}")],
+        [InlineKeyboardButton("📢 Опубликовать", callback_data=f"publish_offer_{offer_id}")]
 ]
 
     pagination_buttons = []
@@ -1181,7 +1219,6 @@ async def offers_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await show_offer_pag(update, context, 0)
 
-
 async def offers_pag_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1193,22 +1230,27 @@ async def delete_offer_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     offer_id = query.data.split("_")[-1]
 
-    # Удаляем оффер из БД
+    # Delete offer in db
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
     cursor.execute("DELETE FROM offers WHERE id = ?", (offer_id,))
     conn.commit()
     conn.close()
 
-    # Удаляем старое сообщение
+    # Delete old msg
     try:
         await query.message.delete()
     except Exception:
         pass
 
+    # Удаление прошло успешно
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"✅ Оффер #{offer_id} удалён.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="offers_menu")]])
+    )
 
-
-PUBLISH_OFFER_TEXT = 30  # Новое состояние для публикации оффера
+PUBLISH_OFFER_TEXT = 30  
 
 async def publish_offer_prompt_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -1245,8 +1287,7 @@ async def publish_offer_text_received(update: Update, context: ContextTypes.DEFA
     if not offer_id:
         await update.message.reply_text("Ошибка: оффер не найден для публикации.")
         return ConversationHandler.END
-
-    # Извлекаем данные оффера из базы данных
+    
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
     cursor.execute(
@@ -1262,7 +1303,7 @@ async def publish_offer_text_received(update: Update, context: ContextTypes.DEFA
     category, photo_file_id, product_name, product_link, price, description = offer
     conn.close()
 
-    # Формируем текст публикации: комбинируем введённый текст с данными оффера
+    # Текст публикации
     caption = (
         f"{text}\n\n"
         f"🏷 Название: {product_name}\n"
@@ -1277,7 +1318,7 @@ async def publish_offer_text_received(update: Update, context: ContextTypes.DEFA
     keyboard = [[InlineKeyboardButton("Заказать", url=order_url)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Отправляем публикацию в канал
+    # Отправка публикации на канал ->
     await context.bot.send_photo(
         chat_id=PUBLICATION_CHANNEL_ID,
         photo=photo_file_id,
@@ -1286,7 +1327,6 @@ async def publish_offer_text_received(update: Update, context: ContextTypes.DEFA
         reply_markup=reply_markup
     )
 
-    # (Опционально) Обновляем статус оффера в базе данных
     conn = sqlite3.connect("orders.db")
     cursor = conn.cursor()
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1297,25 +1337,13 @@ async def publish_offer_text_received(update: Update, context: ContextTypes.DEFA
     conn.commit()
     conn.close()
 
-    await update.message.reply_text("Оффер успешно опубликован.")
-    context.user_data.pop('publish_offer_id', None)
-    return ConversationHandler.END
-
-
-
-
-
-
-    # Отправляем уведомление об удалении
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"✅ Оффер #{offer_id} удалён.",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="offers_menu")]])
-    )
-    
-    # Обновляем список офферов, отправляя новое сообщение
+    # Обновление списка офферов ->
     await show_offer_pag(update, context, 0)
 
+    await update.message.reply_text("Оффер успешно опубликован.")
+    context.user_data.pop('publish_offer_id', None)
+
+    return ConversationHandler.END
 
 async def admin_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Считаем количество заказов со статусом "Новый"
@@ -1445,44 +1473,142 @@ async def delete_order_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(chat_id=user_id, text=f"✅ Ваша заявка #{order_id} была удалёна администратором.")
 
 
+# ------------------Функция отмены--------------
+
+
+async def cancel_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📝 Оставить заявку", callback_data="new_order")],
+        [InlineKeyboardButton("📋 Мои заказы", callback_data="my_orders")],
+        [InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query is not None:
+        await update.callback_query.answer("✅ Заявка отменена.")
+        try:
+            await update.callback_query.message.delete()
+        except Exception as e:
+            print("Ошибка при удалении сообщения:", e)
+        await update.effective_chat.send_message("✅ Оформление заявки отменено.\n\nВыберите нужное действие:", reply_markup=reply_markup)
+    elif update.message is not None:
+        try:
+            await update.message.delete()
+        except Exception as e:
+            print("Ошибка при удалении сообщения:", e)
+        await update.effective_chat.send_message("✅ Оформление заявки отменено.\n\nВыберите нужное действие:", reply_markup=reply_markup)
+
+    context.user_data.pop('order_data', None)
+    return ConversationHandler.END
+
+async def cancel_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await cancel_order_callback(update, context)
+
+
+async def cancel_offer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+            [InlineKeyboardButton("📝 Оставить заявку", callback_data="new_order")],
+            [InlineKeyboardButton("📋 Мои заказы", callback_data="my_orders")],
+            [InlineKeyboardButton("📞 Связаться с админом", url="https://t.me/red_tj")]
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query is not None:
+        await update.callback_query.answer("❌ Создание объявления отменено.")
+        await update.callback_query.edit_message_text("❌ Создание объявления отменено.\n\nВыберите нужное действие:", reply_markup=reply_markup)
+    elif update.message is not None:
+        await update.message.reply_text("❌ Создание объявления отменено.\n\nВыберите нужное действие:", reply_markup=reply_markup)
+    context.user_data.pop('offer', None)
+    return ConversationHandler.END
+
+
+async def cancel_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await cancel_offer_callback(update, context)
 
 # ------------- Основная функция -------------
+
 async def main():
     init_db()
     application = ApplicationBuilder().token(BOT_TOKEN).build()
-
     order_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(new_order_callback, pattern=r"^new_order$"),
-                      CommandHandler('order', order_start)],
-        states={
-            CHOOSING_CATEGORY: [CallbackQueryHandler(category_chosen_callback, pattern=r"^category_")],
-            RECEIVING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_received)],
-            RECEIVING_PHOTO: [MessageHandler(filters.PHOTO, photo_received),
-                              MessageHandler(filters.ALL & ~filters.COMMAND, photo_received)],
-            RECEIVING_PRODUCT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, product_link_received)],
-            RECEIVING_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, price_received)],
-            CONFIRMING_ORDER: [CallbackQueryHandler(confirm_order_callback, pattern="^confirm_order$"),
-                               CallbackQueryHandler(cancel_order_callback, pattern="^cancel_order$")]
-        },
-        fallbacks=[CommandHandler('cancel', cancel_order_callback)]
-    )
+    entry_points=[
+        CallbackQueryHandler(new_order_callback, pattern=r"^new_order$"),
+        CommandHandler('order', order_start)
+    ],
+    states={
+        CHOOSING_CATEGORY: [
+            CallbackQueryHandler(category_chosen_callback, pattern=r"^category_"),
+            CallbackQueryHandler(cancel_order_callback, pattern=r"^cancel_order$")
+        ],
+        RECEIVING_NAME: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, name_received),
+            CallbackQueryHandler(cancel_order_callback, pattern=r"^cancel_order$")
+        ],
+        RECEIVING_PHOTO: [
+            MessageHandler(filters.PHOTO, photo_received),
+            MessageHandler(filters.ALL & ~filters.COMMAND, photo_received),
+            CallbackQueryHandler(cancel_order_callback, pattern=r"^cancel_order$")
+        ],
+        RECEIVING_PRODUCT_LINK: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, product_link_received),
+            CallbackQueryHandler(cancel_order_callback, pattern=r"^cancel_order$")
+        ],
+        RECEIVING_PRICE: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, price_received),
+            CallbackQueryHandler(cancel_order_callback, pattern=r"^cancel_order$")
+        ],
+        CONFIRMING_ORDER: [
+            CallbackQueryHandler(confirm_order_callback, pattern="^confirm_order$"),
+            CallbackQueryHandler(cancel_order_callback, pattern="^cancel_order$")
+        ]
+    },
+    fallbacks=[
+        CommandHandler('cancel', cancel_order_command),
+        CommandHandler('start', cancel_order_command)
+    ],
+    allow_reentry=True
+)
 
     offer_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(lambda u, c: offer_start(u, c), pattern=r"^create_ad$"),
-                      CommandHandler('createoffer', offer_start)],
-        states={
-            OFFER_RECEIVING_CATEGORY: [CallbackQueryHandler(offer_category_callback, pattern=r"^offer_category_")],
-            OFFER_RECEIVING_PHOTO: [MessageHandler(filters.PHOTO, offer_photo_received),
-                                    MessageHandler(filters.ALL & ~filters.COMMAND, offer_photo_received)],
-            OFFER_RECEIVING_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, offer_name_received)],
-            OFFER_RECEIVING_PRODUCT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, offer_product_link_received)],
-            OFFER_RECEIVING_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, offer_price_received)],
-            OFFER_RECEIVING_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, offer_description_received)],
-            OFFER_CONFIRMATION: [CallbackQueryHandler(offer_confirm_callback, pattern="^confirm_offer$"),
-                                 CallbackQueryHandler(offer_cancel_callback, pattern="^cancel_offer$")]
-        },
-        fallbacks=[CommandHandler('cancel', offer_cancel_callback)]
-    )
+    entry_points=[
+        CallbackQueryHandler(offer_start, pattern=r"^create_ad$"),
+        CommandHandler('createoffer', offer_start)
+    ],
+    states={
+        OFFER_RECEIVING_CATEGORY: [
+            CallbackQueryHandler(offer_category_callback, pattern=r"^offer_category_"),
+            CallbackQueryHandler(cancel_offer_callback, pattern=r"^cancel_offer$")
+        ],
+        OFFER_RECEIVING_PHOTO: [
+            MessageHandler(filters.PHOTO, offer_photo_received),
+            MessageHandler(filters.ALL & ~filters.COMMAND, offer_photo_received),
+            CommandHandler('cancel', cancel_offer_callback)
+        ],
+        OFFER_RECEIVING_PRODUCT_NAME: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, offer_name_received),
+            CommandHandler('cancel', cancel_offer_callback)
+        ],
+        OFFER_RECEIVING_PRODUCT_LINK: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, offer_product_link_received),
+            CommandHandler('cancel', cancel_offer_callback)
+        ],
+        OFFER_RECEIVING_PRICE: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, offer_price_received),
+            CommandHandler('cancel', cancel_offer_callback)
+        ],
+        OFFER_RECEIVING_DESCRIPTION: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, offer_description_received),
+            CommandHandler('cancel', cancel_offer_callback)
+        ],
+        OFFER_CONFIRMATION: [
+            CallbackQueryHandler(offer_confirm_callback, pattern="^confirm_offer$"),
+            CallbackQueryHandler(cancel_offer_callback, pattern="^cancel_offer$"),
+            CommandHandler('cancel', cancel_offer_callback)
+        ]
+    },
+    fallbacks=[CommandHandler('cancel', cancel_offer_callback), CommandHandler('start', cancel_offer_callback)],
+    allow_reentry=True
+)
 
     offer_order_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(confirm_order_offer_callback, pattern="^confirm_order_offer$"),
@@ -1508,14 +1634,12 @@ async def main():
     fallbacks=[CommandHandler('cancel', offer_cancel_callback)]
 )
 
-
     offer_order_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(confirm_order_offer_callback, pattern="^confirm_order_offer$"),
                       CallbackQueryHandler(cancel_order_offer_callback, pattern="^cancel_order_offer$")],
         states={},
         fallbacks=[]
     )
-
 
     publish_offer_conv = ConversationHandler(
     entry_points=[CallbackQueryHandler(publish_offer_prompt_callback, pattern=r"^publish_offer_\d+$")],
@@ -1528,12 +1652,12 @@ async def main():
 )
 
     application.add_handler(publish_offer_conv)
-
-    application.add_handler(CommandHandler('start', start))
     application.add_handler(order_conv)
     application.add_handler(offer_conv)
     application.add_handler(offer_order_conv)
-    # Обработчики админ-меню и режимов
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CallbackQueryHandler(my_orders, pattern="^my_orders$"))
+    application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))
     application.add_handler(CallbackQueryHandler(admin_main_menu, pattern=r"^admin_main_menu$"))
     application.add_handler(CallbackQueryHandler(new_orders_menu, pattern=r"^new_orders_menu$"))
     application.add_handler(CallbackQueryHandler(show_new_orders_list, pattern=r"^new_orders_list$"))
@@ -1570,10 +1694,10 @@ async def main():
     application.add_handler(CallbackQueryHandler(offers_pag_callback, pattern=r"^offers_pag_\d+$"))
     application.add_handler(CallbackQueryHandler(delete_offer_callback, pattern=r"^delete_offer_\d+$"))
     application.add_handler(CallbackQueryHandler(publish_offer_prompt_callback, pattern=r"^publish_offer_\d+$"))
-# Обработчик для получения текста публикации от администратора в состоянии PUBLISH_OFFER_TEXT
     application.add_handler(MessageHandler(filters.Chat(ADMIN_ID) & filters.TEXT & ~filters.COMMAND, publish_offer_text_received, block=False))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("admin918", admin_main_menu))
 
-    
     await application.run_polling()
 
 if __name__ == '__main__':
